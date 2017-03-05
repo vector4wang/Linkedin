@@ -17,6 +17,7 @@ import org.apache.http.util.EntityUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -36,10 +37,17 @@ import java.util.Map;
 public class Login {
 
     private Map<String, String> cookieMap = new HashMap<>(64);
-    private String cookie = "";
-    private Document doc = null;
+    private String formUrl = null;
+    private Map<String, String> inputForm = new HashMap<>();
+    private String username = null;
+    private String passwd = null;
 
-    public void login(String user, String passwd) throws Exception {
+    public Login(String username, String passwd) {
+        this.username = username;
+        this.passwd = passwd;
+    }
+
+    public void login() throws Exception {
         RequestConfig requestConfig = RequestConfig.custom().setCookieSpec(CookieSpecs.STANDARD_STRICT).build();
         CloseableHttpClient httpClient = HttpClients.custom().setDefaultRequestConfig(requestConfig).build();
 
@@ -48,25 +56,17 @@ public class Login {
 
             CloseableHttpResponse response = httpClient.execute(get);
             setCookie(response);
-            String responseHtml = EntityUtils.toString(response.getEntity());
-            this.doc = Jsoup.parse(responseHtml);
-
-            String loginCsrfParam = getComponent("#loginCsrfParam-login", "value");
-            String sourceAlias = getComponent("#sourceAlias-login", "value");
-            System.out.println("csrfValue:" + loginCsrfParam);
+            getForm(EntityUtils.toString(response.getEntity()));
             response.close();
 
-
             List<NameValuePair> valuePairs = new LinkedList<>();
-            valuePairs.add(new BasicNameValuePair("session_key", user));
-            valuePairs.add(new BasicNameValuePair("session_password", passwd));
-            valuePairs.add(new BasicNameValuePair("isJsEnabled", "false"));
-            valuePairs.add(new BasicNameValuePair("loginCsrfParam", loginCsrfParam));
-            valuePairs.add(new BasicNameValuePair("sourceAlias", sourceAlias));
+            for (String name : this.inputForm.keySet()) {
+                valuePairs.add(new BasicNameValuePair(name, this.inputForm.get(name)));
+            }
             UrlEncodedFormEntity entity = new UrlEncodedFormEntity(valuePairs, Consts.UTF_8);
 
             HttpPost post = new HttpPost("https://www.linkedin.com/uas/login-submit");
-            post.setHeader("Cookie", this.cookie);
+            post.setHeader("Cookie", getCookie());
             post.setHeader("origin", "https://www.linkedin.com");
             post.setHeader("pragma", "no-cache");
             post.setHeader("referer", "https://www.linkedin.com/");
@@ -82,31 +82,43 @@ public class Login {
             }
 
             get = new HttpGet("http://www.linkedin.com/nhome/");
-            get.setHeader("Cookie", this.cookie);
-            response = httpClient.execute(get);
-            responseHtml = EntityUtils.toString(response.getEntity());
-            response.close();
-            System.out.println(responseHtml);
-
+            get.setHeader("Cookie", getCookie());
+            httpClient.execute(get);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private String getComponent(String selectQuery, String attr) throws IOException {
-        if (this.doc != null) {
-            Element queryDom = this.doc.select(selectQuery).first();
-            return queryDom.attr(attr);
+    private void getForm(String html) {
+        Document doc = Jsoup.parse(html);
+        Element form = doc.select("form").first();
+        this.formUrl = form.attr("action");
+
+        Elements input = form.select("input");
+        for (Element ele : input) {
+            String name = ele.attr("name");
+            String value = ele.attr("value");
+
+            if (name != null && value != null) {
+                this.inputForm.put(name, value);
+            }
+        }
+        this.inputForm.put("session_key", this.username);
+        this.inputForm.put("session_password", this.passwd);
+    }
+
+    private String getCookie() {
+        String cookiesTmp = "";
+        for (String key : this.cookieMap.keySet()) {
+            cookiesTmp += key + "=" + this.cookieMap.get(key) + ";";
         }
 
-        throw new IOException("尚未解析网页");
+        return cookiesTmp.substring(0, cookiesTmp.length() - 2);
     }
 
     private void setCookie(HttpResponse httpResponse) {
-        System.out.println("----setCookieStore");
         Header headers[] = httpResponse.getHeaders("Set-Cookie");
         if (headers == null || headers.length == 0) {
-            System.out.println("----there are no cookies");
             return;
         }
         String cookie = "";
@@ -123,15 +135,9 @@ public class Login {
             if (this.cookieMap.containsKey(c.split("=")[0])) {
                 this.cookieMap.remove(c.split("=")[0]);
             }
-            this.cookieMap.put(c.split("=")[0], c.split("=").length == 1 ? "" : (c.split("=").length == 2 ? c.split("=")[1] : c.split("=", 2)[1]));
+            this.cookieMap.put(c.split("=")[0], c.split("=").length == 1 ? "" :
+                    (c.split("=").length == 2 ? c.split("=")[1] : c.split("=", 2)[1]));
         }
-        System.out.println("----setCookieStore success");
-        String cookiesTmp = "";
-        for (String key : this.cookieMap.keySet()) {
-            cookiesTmp += key + "=" + this.cookieMap.get(key) + ";";
-        }
-
-        this.cookie = cookiesTmp.substring(0, cookiesTmp.length() - 2);
     }
 
 }

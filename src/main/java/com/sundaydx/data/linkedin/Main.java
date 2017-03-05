@@ -8,9 +8,9 @@ import com.sundaydx.data.linkedin.net.Login;
  */
 public class Main {
     public static void main(String[] args) {
-        Login login = new Login();
+        Login login = new Login("账号", "密码");
         try {
-            login.login("账号", "密码");
+            login.login();
         } catch (Exception e) {
             e.printStackTrace();
         }
