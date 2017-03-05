@@ -1,0 +1,30 @@
+group 'com.sundaydx.lab'
+version '1.0-SNAPSHOT'
+
+apply plugin: 'java'
+
+allprojects {
+    repositories {
+        def REPOSITORY_URL = 'http://maven.aliyun.com/nexus/content/groups/public/'
+        all { ArtifactRepository repo ->
+            if (repo instanceof MavenArtifactRepository) {
+                def url = repo.url.toString()
+                if (url.startsWith('https://repo1.maven.org/maven2')
+                        || url.startsWith('https://jcenter.bintray.com/')) {
+                    Project.logger.lifecycle "Repository ${repo.url} replaced by $REPOSITORY_URL."
+                    remove repo
+                }
+            }
+        }
+        maven {
+            url REPOSITORY_URL
+        }
+    }
+}
+
+dependencies {
+    testCompile group: 'junit', name: 'junit', version: '4.11'
+
+    compile group: 'org.apache.httpcomponents', name: 'httpclient', version: '4.5'
+    compile group: 'org.jsoup', name: 'jsoup', version: '1.10.2'
+}
